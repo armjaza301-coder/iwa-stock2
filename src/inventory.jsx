@@ -493,7 +493,7 @@ function ProductModal({ T, store, item, onClose, onSave }) {
             <div key={key} style={{marginBottom:11}}>
               <label style={{fontSize:9,fontWeight:700,color:T.text3,letterSpacing:1.5,display:"block",marginBottom:4}}>{label}</label>
               <input type="text" value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={ph}
-                style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text1,background:T.card,fontFamily:"'Sarabun',sans-serif",outline:"none"}}/>
+                style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:"#1A1A1A",background:"#FFFFFF",fontFamily:"'Sarabun',sans-serif",outline:"none"}}/>
             </div>
           ))}
           <div style={{marginBottom:11}}>
@@ -512,12 +512,12 @@ function ProductModal({ T, store, item, onClose, onSave }) {
             <label style={{fontSize:9,fontWeight:700,color:T.text3,letterSpacing:1.5,display:"block",marginBottom:4}}>จำนวนแต่ละไซส์</label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
               {SIZES.map(s=>(
-                <div key={s} style={{background:T.card,border:`1.5px solid ${T.border}`,borderRadius:8,padding:"6px",textAlign:"center"}}>
-                  <div style={{fontSize:9,fontWeight:800,color:sChip[s]?.tc||T.text3,marginBottom:3}}>{s}</div>
+                <div key={s} style={{background:"#FFFFFF",border:"2px solid #CCCCCC",borderRadius:8,padding:"6px",textAlign:"center"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:sChip[s]?.tc||"#333333",marginBottom:3}}>{s}</div>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>
-                    <button onClick={()=>setSz(s,(form.sizes[s]||0)-1)} style={{width:20,height:20,borderRadius:5,border:`1px solid ${T.border}`,background:"#F3F4F6",fontSize:13,cursor:"pointer",lineHeight:1}}>−</button>
-                    <span style={{fontSize:14,fontWeight:800,color:T.text1,minWidth:20,textAlign:"center"}}>{form.sizes[s]||0}</span>
-                    <button onClick={()=>setSz(s,(form.sizes[s]||0)+1)} style={{width:20,height:20,borderRadius:5,border:`1px solid ${T.border}`,background:"#F3F4F6",fontSize:13,cursor:"pointer",lineHeight:1}}>+</button>
+                    <button onClick={()=>setSz(s,(form.sizes[s]||0)-1)} style={{width:24,height:24,borderRadius:5,border:"1.5px solid #888888",background:"#F0F0F0",fontSize:15,cursor:"pointer",lineHeight:1,color:"#1A1A1A",fontWeight:700}}>−</button>
+                    <span style={{fontSize:16,fontWeight:900,color:"#1A1A1A",minWidth:24,textAlign:"center"}}>{form.sizes[s]||0}</span>
+                    <button onClick={()=>setSz(s,(form.sizes[s]||0)+1)} style={{width:24,height:24,borderRadius:5,border:"1.5px solid #888888",background:"#F0F0F0",fontSize:15,cursor:"pointer",lineHeight:1,color:"#1A1A1A",fontWeight:700}}>+</button>
                   </div>
                 </div>
               ))}
