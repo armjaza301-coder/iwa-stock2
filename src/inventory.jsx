@@ -888,9 +888,7 @@ export default function App() {
 
   const T       = THEMES[store];
   const stock   = store==="iwa" ? iwaStock  : unifStock;
-  const setStock  = store==="iwa" ? setIwaStock : setUnifStock;
   const logs    = store==="iwa" ? iwaLogs   : unifLogs;
-  const setLogs   = store==="iwa" ? setIwaLogs  : setUnifLogs;
   const LOCS    = getLocs(store);
 
   const [search,setSearch]       = useState("");
