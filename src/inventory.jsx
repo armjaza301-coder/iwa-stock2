@@ -1,12 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 // ═══════════════════════════════════════════════════════
-// FIREBASE CONFIG
+// FIREBASE — ใช้ผ่าน CDN script tag (compat version)
 // ═══════════════════════════════════════════════════════
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get, onValue } from "firebase/database";
-
-const firebaseConfig = {
+const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBDLXkD20QQNIbhoBLO4vXGoPQmZxSj1PI",
   authDomain: "iwa-stock.firebaseapp.com",
   databaseURL: "https://iwa-stock-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -16,8 +13,27 @@ const firebaseConfig = {
   appId: "1:809472335953:web:601859951a010140ba1870"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getDatabase(firebaseApp);
+// โหลด Firebase SDK ผ่าน script tag
+function loadFirebaseScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+let _db = null;
+async function getDB() {
+  if (_db) return _db;
+  await loadFirebaseScript("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
+  await loadFirebaseScript("https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js");
+  if (!window.firebase.apps.length) {
+    window.firebase.initializeApp(FIREBASE_CONFIG);
+  }
+  _db = window.firebase.database();
+  return _db;
+}
 
 const KEY_IWA   = "iwa_stock_v6";
 const KEY_UNIF  = "unif_stock_v6";
@@ -26,23 +42,28 @@ const KEY_ULOGS = "unif_logs_v6";
 
 async function sGet(key) {
   try {
-    const snapshot = await get(ref(db, key));
-    if (snapshot.exists()) return snapshot.val();
-  } catch(e) { console.error("sGet error:", e); }
+    const db = await getDB();
+    const snap = await db.ref(key).get();
+    if (snap.exists()) return snap.val();
+  } catch(e) { console.error("sGet:", e); }
   return null;
 }
 
 async function sSet(key, val) {
   try {
-    await set(ref(db, key), val);
-  } catch(e) { console.error("sSet error:", e); }
+    const db = await getDB();
+    await db.ref(key).set(val);
+  } catch(e) { console.error("sSet:", e); }
 }
 
 function sListen(key, callback) {
-  const dbRef = ref(db, key);
-  return onValue(dbRef, (snapshot) => {
-    if (snapshot.exists()) callback(snapshot.val());
+  let unsub = ()=>{};
+  getDB().then(db => {
+    const ref = db.ref(key);
+    ref.on("value", snap => { if (snap.exists()) callback(snap.val()); });
+    unsub = () => ref.off("value");
   });
+  return () => unsub();
 }
 
 // ═══════════════════════════════════════════════════════
