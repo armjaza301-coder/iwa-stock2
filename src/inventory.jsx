@@ -1,21 +1,48 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 // ═══════════════════════════════════════════════════════
-// SHARED STORAGE
+// FIREBASE CONFIG
 // ═══════════════════════════════════════════════════════
-const SHARED = true;
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, get, onValue } from "firebase/database";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBDLXkD20QQNIbhoBLO4vXGoPQmZxSj1PI",
+  authDomain: "iwa-stock.firebaseapp.com",
+  databaseURL: "https://iwa-stock-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "iwa-stock",
+  storageBucket: "iwa-stock.firebasestorage.app",
+  messagingSenderId: "809472335953",
+  appId: "1:809472335953:web:601859951a010140ba1870"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
+
 const KEY_IWA   = "iwa_stock_v6";
 const KEY_UNIF  = "unif_stock_v6";
 const KEY_ILOGS = "iwa_logs_v6";
 const KEY_ULOGS = "unif_logs_v6";
-const POLL_MS   = 4000;
 
 async function sGet(key) {
-  try { const r = await window.storage.get(key, SHARED); if (r?.value) return JSON.parse(r.value); } catch(e){}
+  try {
+    const snapshot = await get(ref(db, key));
+    if (snapshot.exists()) return snapshot.val();
+  } catch(e) { console.error("sGet error:", e); }
   return null;
 }
+
 async function sSet(key, val) {
-  try { await window.storage.set(key, JSON.stringify(val), SHARED); } catch(e){}
+  try {
+    await set(ref(db, key), val);
+  } catch(e) { console.error("sSet error:", e); }
+}
+
+function sListen(key, callback) {
+  const dbRef = ref(db, key);
+  return onValue(dbRef, (snapshot) => {
+    if (snapshot.exists()) callback(snapshot.val());
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -882,9 +909,7 @@ export default function App() {
   const [iwaLogs,setIwaLogs]     = useState([]);
   const [unifLogs,setUnifLogs]   = useState([]);
   const [loaded,setLoaded]       = useState(false);
-  const [syncing,setSyncing]     = useState(false);
   const [lastSync,setLastSync]   = useState(null);
-  const localTs = useRef({ iwa:0, unif:0 });
 
   const T       = THEMES[store];
   const stock   = store==="iwa" ? iwaStock  : unifStock;
@@ -899,35 +924,29 @@ export default function App() {
   const [stockModal,setStockModal] = useState(null);
   const [editModal,setEditModal]   = useState(null);
 
-  // Load
+  // Load + Firebase realtime listeners
   useEffect(()=>{
     (async()=>{
       const [is,us,il,ul]=await Promise.all([sGet(KEY_IWA),sGet(KEY_UNIF),sGet(KEY_ILOGS),sGet(KEY_ULOGS)]);
-      if(is) setIwaStock(is.data||DEF_IWA);
-      if(us) setUnifStock(us.data||DEF_UNIF);
+      if(is) setIwaStock(is);
+      else await sSet(KEY_IWA, DEF_IWA);
+      if(us) setUnifStock(us);
+      else await sSet(KEY_UNIF, DEF_UNIF);
       if(il) setIwaLogs(il);
       if(ul) setUnifLogs(ul);
       setLoaded(true);setLastSync(new Date());
     })();
+
+    // Firebase realtime listeners — อัพเดททันทีเมื่อข้อมูลเปลี่ยน
+    const u1 = sListen(KEY_IWA,  (v)=>{ setIwaStock(v);  setLastSync(new Date()); });
+    const u2 = sListen(KEY_UNIF, (v)=>{ setUnifStock(v); setLastSync(new Date()); });
+    const u3 = sListen(KEY_ILOGS,(v)=>{ setIwaLogs(v);  });
+    const u4 = sListen(KEY_ULOGS,(v)=>{ setUnifLogs(v); });
+    return ()=>{ u1(); u2(); u3(); u4(); };
   },[]);
 
-  // Poll
-  useEffect(()=>{
-    if(!loaded)return;
-    const id=setInterval(async()=>{
-      setSyncing(true);
-      const [is,us,il,ul]=await Promise.all([sGet(KEY_IWA),sGet(KEY_UNIF),sGet(KEY_ILOGS),sGet(KEY_ULOGS)]);
-      if(is&&is.ts>localTs.current.iwa){setIwaStock(is.data);localTs.current.iwa=is.ts;}
-      if(us&&us.ts>localTs.current.unif){setUnifStock(us.data);localTs.current.unif=us.ts;}
-      if(il)setIwaLogs(il);
-      if(ul)setUnifLogs(ul);
-      setLastSync(new Date());setSyncing(false);
-    },POLL_MS);
-    return()=>clearInterval(id);
-  },[loaded]);
-
   const saveStock=useCallback(async(key,data)=>{
-    const ts=Date.now();await sSet(key,{data,ts});return ts;
+    await sSet(key, data);
   },[]);
 
   // Stats
@@ -959,20 +978,22 @@ export default function App() {
 
   async function handleUpdate(u){
     const next=store==="iwa"?iwaStock.map(p=>p.id===u.id?u:p):unifStock.map(p=>p.id===u.id?u:p);
-    if(store==="iwa"){setIwaStock(next);const ts=await saveStock(KEY_IWA,next);localTs.current.iwa=ts;}
-    else{setUnifStock(next);const ts=await saveStock(KEY_UNIF,next);localTs.current.unif=ts;}
+    if(store==="iwa"){setIwaStock(next);await saveStock(KEY_IWA,next);}
+    else{setUnifStock(next);await saveStock(KEY_UNIF,next);}
   }
   async function handleSave(item){
     const prev=store==="iwa"?iwaStock:unifStock;
     const next=prev.some(p=>p.id===item.id)?prev.map(p=>p.id===item.id?item:p):[...prev,item];
-    if(store==="iwa"){setIwaStock(next);const ts=await saveStock(KEY_IWA,next);localTs.current.iwa=ts;}
-    else{setUnifStock(next);const ts=await saveStock(KEY_UNIF,next);localTs.current.unif=ts;}
+    // เรียงสินค้าชื่อเดียวกันไว้ด้วยกัน
+    next.sort((a,b)=>a.name.localeCompare(b.name,"th"));
+    if(store==="iwa"){setIwaStock(next);await saveStock(KEY_IWA,next);}
+    else{setUnifStock(next);await saveStock(KEY_UNIF,next);}
   }
   async function handleDelete(id){
     if(!window.confirm("ลบสินค้านี้?"))return;
     const next=store==="iwa"?iwaStock.filter(p=>p.id!==id):unifStock.filter(p=>p.id!==id);
-    if(store==="iwa"){setIwaStock(next);const ts=await saveStock(KEY_IWA,next);localTs.current.iwa=ts;}
-    else{setUnifStock(next);const ts=await saveStock(KEY_UNIF,next);localTs.current.unif=ts;}
+    if(store==="iwa"){setIwaStock(next);await saveStock(KEY_IWA,next);}
+    else{setUnifStock(next);await saveStock(KEY_UNIF,next);}
   }
   async function handleLog(log){
     if(store==="iwa"){const next=[...iwaLogs,log];setIwaLogs(next);await sSet(KEY_ILOGS,next);}
@@ -1009,9 +1030,9 @@ export default function App() {
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:900,fontSize:17,background:`linear-gradient(135deg,${T.gold3},${T.gold2})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{T.name}</div>
               <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
-                <span style={{width:6,height:6,borderRadius:"50%",background:syncing?"#FCD34D":"#22C55E",display:"inline-block",animation:syncing?"pulse 1s infinite":"none"}}/>
+                <span style={{width:6,height:6,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}/>
                 <span style={{fontSize:9,color:"rgba(255,255,255,0.45)",fontWeight:600}}>
-                  {syncing?"กำลังซิงค์...":"Real-time · "+syncTime}
+                  Firebase Real-time · {syncTime}
                 </span>
               </div>
             </div>
