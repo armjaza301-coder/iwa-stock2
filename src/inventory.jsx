@@ -927,27 +927,60 @@ export default function App() {
   // Load + Firebase realtime listeners
   useEffect(()=>{
     (async()=>{
-      const [is,us,il,ul]=await Promise.all([sGet(KEY_IWA),sGet(KEY_UNIF),sGet(KEY_ILOGS),sGet(KEY_ULOGS)]);
-      if(is) setIwaStock(is);
-      else await sSet(KEY_IWA, DEF_IWA);
-      if(us) setUnifStock(us);
-      else await sSet(KEY_UNIF, DEF_UNIF);
-      if(il) setIwaLogs(il);
-      if(ul) setUnifLogs(ul);
-      setLoaded(true);setLastSync(new Date());
+      // ตรวจว่า Firebase มีข้อมูลไหม ถ้าไม่มีค่อยใส่ default
+      const [is,us,il,ul]=await Promise.all([
+        sGet(KEY_IWA), sGet(KEY_UNIF),
+        sGet(KEY_ILOGS), sGet(KEY_ULOGS)
+      ]);
+      if(!is) await sSet(KEY_IWA, DEF_IWA);
+      if(!us) await sSet(KEY_UNIF, DEF_UNIF);
+      if(il) setIwaLogs(Array.isArray(il)?il:Object.values(il));
+      if(ul) setUnifLogs(Array.isArray(ul)?ul:Object.values(ul));
+      setLastSync(new Date());
     })();
 
-    // Firebase realtime listeners — อัพเดททันทีเมื่อข้อมูลเปลี่ยน
-    const u1 = sListen(KEY_IWA,  (v)=>{ setIwaStock(v);  setLastSync(new Date()); });
-    const u2 = sListen(KEY_UNIF, (v)=>{ setUnifStock(v); setLastSync(new Date()); });
-    const u3 = sListen(KEY_ILOGS,(v)=>{ setIwaLogs(v);  });
-    const u4 = sListen(KEY_ULOGS,(v)=>{ setUnifLogs(v); });
+    // Firebase realtime listeners — โหลดข้อมูลจริงจาก Firebase เสมอ
+    const u1 = sListen(KEY_IWA, (v)=>{
+      const arr = Array.isArray(v) ? v : Object.values(v);
+      setIwaStock(arr);
+      setLastSync(new Date());
+      setLoaded(true);
+    });
+    const u2 = sListen(KEY_UNIF, (v)=>{
+      const arr = Array.isArray(v) ? v : Object.values(v);
+      setUnifStock(arr);
+      setLastSync(new Date());
+      setLoaded(true);
+    });
+    const u3 = sListen(KEY_ILOGS,(v)=>{
+      setIwaLogs(Array.isArray(v)?v:Object.values(v));
+    });
+    const u4 = sListen(KEY_ULOGS,(v)=>{
+      setUnifLogs(Array.isArray(v)?v:Object.values(v));
+    });
     return ()=>{ u1(); u2(); u3(); u4(); };
   },[]);
 
   const saveStock=useCallback(async(key,data)=>{
-    await sSet(key, data);
+    // Firebase ไม่รองรับ array โดยตรง บันทึกเป็น object แทน
+    const obj = {};
+    data.forEach((item, i) => { obj[i] = item; });
+    await sSet(key, obj);
   },[]);
+
+  async function handleLog(log){
+    if(store==="iwa"){
+      const next=[...iwaLogs,log];
+      setIwaLogs(next);
+      const obj={};next.forEach((l,i)=>{obj[i]=l;});
+      await sSet(KEY_ILOGS,obj);
+    } else {
+      const next=[...unifLogs,log];
+      setUnifLogs(next);
+      const obj={};next.forEach((l,i)=>{obj[i]=l;});
+      await sSet(KEY_ULOGS,obj);
+    }
+  }
 
   // Stats
   const today=todayStr();
@@ -994,10 +1027,6 @@ export default function App() {
     const next=store==="iwa"?iwaStock.filter(p=>p.id!==id):unifStock.filter(p=>p.id!==id);
     if(store==="iwa"){setIwaStock(next);await saveStock(KEY_IWA,next);}
     else{setUnifStock(next);await saveStock(KEY_UNIF,next);}
-  }
-  async function handleLog(log){
-    if(store==="iwa"){const next=[...iwaLogs,log];setIwaLogs(next);await sSet(KEY_ILOGS,next);}
-    else{const next=[...unifLogs,log];setUnifLogs(next);await sSet(KEY_ULOGS,next);}
   }
   const switchStore=s=>{setStore(s);setSearch("");setFilterCat("all");setFilterLoc("all");setFilterSub("all");};
   const syncTime=lastSync?lastSync.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"";
